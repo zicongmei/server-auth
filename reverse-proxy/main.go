@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/time/rate"
 )
 
 //go:embed static
@@ -36,8 +38,9 @@ type User struct {
 }
 
 type UserStore struct {
-	Users map[string]User `json:"users"`
-	mu    sync.RWMutex
+	Users         map[string]User `json:"users"`
+	InitialAdmin  string          `json:"initial_admin"`
+	mu            sync.RWMutex
 }
 
 type Session struct {
@@ -52,20 +55,38 @@ type SessionStore struct {
 }
 
 var (
-	userStore    *UserStore
-	sessionStore *SessionStore
-	proxyPort    int
-	dataDir      string
-	hostname     string
-	rootPassword string
+	userStore     *UserStore
+	sessionStore  *SessionStore
+	proxyPort     int
+	dataDir       string
+	hostname      string
+	adminUsername string
+	adminPassword string
+	limiters      = make(map[string]*rate.Limiter)
+	limitersMu    sync.Mutex
 )
+
+func getRateLimiter(ip string) *rate.Limiter {
+	limitersMu.Lock()
+	defer limitersMu.Unlock()
+
+	limiter, exists := limiters[ip]
+	if !exists {
+		// 5 requests per minute, burst of 10
+		limiter = rate.NewLimiter(rate.Every(time.Minute/5), 10)
+		limiters[ip] = limiter
+	}
+
+	return limiter
+}
 
 func main() {
 	listenPort := flag.Int("port", 443, "Port to listen on")
 	flag.IntVar(&proxyPort, "proxy-port", 3000, "Localhost port to proxy to")
 	flag.StringVar(&hostname, "hostname", "", "Host name for Let's Encrypt certificate")
 	flag.StringVar(&dataDir, "data-dir", ".", "Directory to store user data")
-	flag.StringVar(&rootPassword, "root-password", "", "Initial password for 'root' user (required if users.json is missing)")
+	flag.StringVar(&adminUsername, "admin-username", "", "Initial admin username (required if users.json is missing)")
+	flag.StringVar(&adminPassword, "admin-password", "", "Initial admin password (required if users.json is missing)")
 	flag.Parse()
 
 	if hostname == "" {
@@ -80,13 +101,13 @@ func main() {
 	}
 
 	if err := userStore.Load(); err != nil {
-		if rootPassword == "" {
-			log.Fatal("Error: No existing user data found and -root-password flag not provided. " +
-				"You must provide an initial root password for the first run.")
+		if adminUsername == "" || adminPassword == "" {
+			log.Fatal("Error: No existing user data found. You must provide -admin-username and -admin-password for the first run.")
 		}
-		log.Printf("No existing user data, creating default user 'root'")
-		if err := userStore.CreateUser("root", rootPassword); err != nil {
-			log.Fatal("Failed to create default user:", err)
+		log.Printf("No existing user data, creating initial admin user '%s'", adminUsername)
+		userStore.InitialAdmin = adminUsername
+		if err := userStore.CreateUser(adminUsername, adminPassword); err != nil {
+			log.Fatal("Failed to create initial admin user:", err)
 		}
 	}
 
@@ -120,7 +141,6 @@ func main() {
 		log.Printf("Starting HTTPS server on https://%s%s", hostname, addr)
 		log.Printf("Proxying authenticated requests to http://localhost:%d", proxyPort)
 
-		// Serve HTTP for Let's Encrypt challenges
 		go func() {
 			log.Fatal(http.ListenAndServe(":80", certManager.HTTPHandler(nil)))
 		}()
@@ -142,11 +162,11 @@ func (us *UserStore) Load() error {
 		return err
 	}
 
-	return json.Unmarshal(data, &us.Users)
+	return json.Unmarshal(data, us)
 }
 
 func (us *UserStore) save() error {
-	data, err := json.MarshalIndent(us.Users, "", "  ")
+	data, err := json.MarshalIndent(us, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -188,8 +208,8 @@ func (us *UserStore) DeleteUser(username string) error {
 	us.mu.Lock()
 	defer us.mu.Unlock()
 
-	if username == "root" {
-		return fmt.Errorf("cannot delete root user")
+	if username == us.InitialAdmin {
+		return fmt.Errorf("cannot delete initial admin user")
 	}
 
 	delete(us.Users, username)
@@ -296,6 +316,17 @@ func loginPageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiLoginHandler(w http.ResponseWriter, r *http.Request) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ip = r.RemoteAddr
+	}
+
+	limiter := getRateLimiter(ip)
+	if !limiter.Allow() {
+		http.Error(w, "Too many login attempts. Please try again later.", http.StatusTooManyRequests)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -323,7 +354,7 @@ func apiLoginHandler(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   hostname != "", // Only secure if using HTTPS
+		Secure:   hostname != "",
 		MaxAge:   sessionDays * 24 * 60 * 60,
 	})
 
@@ -366,7 +397,10 @@ func adminAPIHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		users := userStore.ListUsers()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(users)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"users":         users,
+			"initial_admin": userStore.InitialAdmin,
+		})
 
 	case http.MethodPost:
 		var req struct {

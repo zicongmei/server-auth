@@ -8,16 +8,18 @@ function showMessage(text, type) {
 
 async function loadUsers() {
     const response = await fetch('/api/admin/users');
-    const users = await response.json();
+    const data = await response.json();
+    const users = data.users;
+    const initialAdmin = data.initial_admin;
     const tbody = document.getElementById('users-list');
     tbody.innerHTML = users.map(user =>
         '<tr>' +
             '<td>' + user + '</td>' +
             '<td>' +
                 '<button class="btn btn-secondary" onclick="prepareChangePassword(\'' + user + '\')">Change Password</button> ' +
-                (user !== 'root' ?
+                (user !== initialAdmin ?
                     '<button class="btn btn-danger" onclick="deleteUser(\'' + user + '\')">Delete</button>' :
-                    '<em>Cannot delete root</em>'
+                    '<em>Cannot delete initial admin</em>'
                 ) +
             '</td>' +
         '</tr>'

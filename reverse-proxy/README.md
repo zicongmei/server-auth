@@ -5,9 +5,10 @@ A Go-based HTTPS reverse proxy that provides authentication and a user managemen
 ## Features
 
 - HTTPS using Let's Encrypt (`autocert`).
+- Per-IP rate limiting on the login page (5 requests per minute).
 - Authentication required for all proxied requests.
 - Admin interface at `/admin` to manage users (create, update, change password, delete).
-- Default user `root` with password `root`.
+- Configurable initial admin account.
 - Passwords stored as bcrypt hashes in `users.json`.
 
 ## Requirements
@@ -38,7 +39,7 @@ make docker-build
 Running the binary requires root privileges to bind to ports 80 and 443.
 
 ```bash
-sudo ./reverse-proxy -hostname yourdomain.com -proxy-port 3000 -root-password your_secret_password
+sudo ./reverse-proxy -hostname yourdomain.com -proxy-port 3000 -admin-username admin -admin-password your_secret_password
 ```
 
 ### Running with Docker
@@ -51,7 +52,7 @@ docker run -d \
   -p 443:443 \
   -v /absolute/path/to/host/data:/app/data \
   zicongmei/reverse-proxy:latest \
-  -hostname yourdomain.com -proxy-port 3128 -root-password your_secret_password
+  -hostname yourdomain.com -proxy-port 3128 -admin-username admin -admin-password your_secret_password
 ```
 
 ### Flags
@@ -60,7 +61,8 @@ docker run -d \
 - `-proxy-port`: The localhost port to redirect authenticated traffic to (default: 3000).
 - `-port`: The port this server listens on (default: 443).
 - `-data-dir`: Directory to store `users.json` and certificates (default: ".").
-- `-root-password`: Initial password for 'root' user (required ONLY if `users.json` is missing).
+- `-admin-username`: Initial admin username (required ONLY if `users.json` is missing).
+- `-admin-password`: Initial admin password (required ONLY if `users.json` is missing).
 
 ## Docker Hub
 
