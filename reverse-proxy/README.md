@@ -42,14 +42,16 @@ sudo ./reverse-proxy -hostname yourdomain.com -proxy-port 3000
 ```
 
 ### Running with Docker
+To run the proxy in detached mode, mapping ports 80 and 443, and mounting a data directory from your host:
+
 ```bash
 docker run -d \
   --name reverse-proxy \
   -p 80:80 \
   -p 443:443 \
-  -v $(pwd)/data:/app/data \
+  -v /absolute/path/to/host/data:/app/data \
   zicongmei/reverse-proxy:latest \
-  -hostname yourdomain.com -proxy-port 3000
+  -hostname yourdomain.com -proxy-port 3128
 ```
 
 ### Flags
