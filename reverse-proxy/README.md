@@ -38,7 +38,7 @@ make docker-build
 Running the binary requires root privileges to bind to ports 80 and 443.
 
 ```bash
-sudo ./reverse-proxy -hostname yourdomain.com -proxy-port 3000
+sudo ./reverse-proxy -hostname yourdomain.com -proxy-port 3000 -root-password your_secret_password
 ```
 
 ### Running with Docker
@@ -51,7 +51,7 @@ docker run -d \
   -p 443:443 \
   -v /absolute/path/to/host/data:/app/data \
   zicongmei/reverse-proxy:latest \
-  -hostname yourdomain.com -proxy-port 3128
+  -hostname yourdomain.com -proxy-port 3128 -root-password your_secret_password
 ```
 
 ### Flags
@@ -60,6 +60,7 @@ docker run -d \
 - `-proxy-port`: The localhost port to redirect authenticated traffic to (default: 3000).
 - `-port`: The port this server listens on (default: 443).
 - `-data-dir`: Directory to store `users.json` and certificates (default: ".").
+- `-root-password`: Initial password for 'root' user (required ONLY if `users.json` is missing).
 
 ## Docker Hub
 

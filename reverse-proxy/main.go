@@ -57,6 +57,7 @@ var (
 	proxyPort    int
 	dataDir      string
 	hostname     string
+	rootPassword string
 )
 
 func main() {
@@ -64,6 +65,7 @@ func main() {
 	flag.IntVar(&proxyPort, "proxy-port", 3000, "Localhost port to proxy to")
 	flag.StringVar(&hostname, "hostname", "", "Host name for Let's Encrypt certificate")
 	flag.StringVar(&dataDir, "data-dir", ".", "Directory to store user data")
+	flag.StringVar(&rootPassword, "root-password", "", "Initial password for 'root' user (required if users.json is missing)")
 	flag.Parse()
 
 	if hostname == "" {
@@ -78,8 +80,12 @@ func main() {
 	}
 
 	if err := userStore.Load(); err != nil {
-		log.Printf("No existing user data, creating default user 'root' with password 'root'")
-		if err := userStore.CreateUser("root", "root"); err != nil {
+		if rootPassword == "" {
+			log.Fatal("Error: No existing user data found and -root-password flag not provided. " +
+				"You must provide an initial root password for the first run.")
+		}
+		log.Printf("No existing user data, creating default user 'root'")
+		if err := userStore.CreateUser("root", rootPassword); err != nil {
 			log.Fatal("Failed to create default user:", err)
 		}
 	}

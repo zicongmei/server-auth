@@ -26,7 +26,10 @@ async function loadUsers() {
 
 function prepareChangePassword(username) {
     document.getElementById('new-username').value = username;
-    document.getElementById('new-password').focus();
+    const passwordInput = document.getElementById('new-password');
+    passwordInput.value = '';
+    passwordInput.focus();
+    passwordInput.placeholder = 'Enter new password for ' + username;
 }
 
 async function deleteUser(username) {
