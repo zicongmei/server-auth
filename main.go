@@ -13,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -53,11 +54,13 @@ var (
 	userStore    *UserStore
 	sessionStore *SessionStore
 	proxyPort    int
+	dataDir      string
 )
 
 func main() {
 	port := flag.Int("port", 8080, "Server port")
 	flag.IntVar(&proxyPort, "proxy", 3000, "Backend port to proxy to")
+	flag.StringVar(&dataDir, "data-dir", ".", "Directory to store user data")
 	flag.Parse()
 
 	userStore = &UserStore{
@@ -97,7 +100,7 @@ func (us *UserStore) Load() error {
 	us.mu.Lock()
 	defer us.mu.Unlock()
 
-	data, err := os.ReadFile(dataFile)
+	data, err := os.ReadFile(filepath.Join(dataDir, dataFile))
 	if err != nil {
 		return err
 	}
@@ -114,7 +117,7 @@ func (us *UserStore) Save() error {
 		return err
 	}
 
-	return os.WriteFile(dataFile, data, 0600)
+	return os.WriteFile(filepath.Join(dataDir, dataFile), data, 0600)
 }
 
 func (us *UserStore) save() error {
@@ -123,7 +126,7 @@ func (us *UserStore) save() error {
 		return err
 	}
 
-	return os.WriteFile(dataFile, data, 0600)
+	return os.WriteFile(filepath.Join(dataDir, dataFile), data, 0600)
 }
 
 func (us *UserStore) CreateUser(username, password string) error {

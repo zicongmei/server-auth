@@ -32,6 +32,52 @@ go run main.go -port 8080 -proxy 3000
 
 - `-port`: Server port (default: 8080)
 - `-proxy`: Backend port to proxy authenticated requests to (default: 3000)
+- `-data-dir`: Directory to store user data (default: ".")
+
+## Docker
+
+You can build and run this application as a Docker container.
+
+### Build
+
+A `Makefile` is provided for convenience. To build the Docker image, run:
+
+```bash
+make build
+```
+
+This will create a `zicongmei/server-auth` image.
+
+### Push
+
+To push the image to Docker Hub, run:
+
+```bash
+make push
+```
+
+Note: You must be logged into Docker Hub with credentials that have permission to push to the `zicongmei` repository.
+
+### Run
+
+To run the container, you need to map the server port and mount a volume for persistent user data.
+
+```bash
+# Create a directory on the host to store user data
+mkdir -p /path/to/your/data
+
+# Run the container
+docker run -p 8080:8080 -v /path/to/your/data:/data zicongmei/server-auth
+```
+
+- `-p 8080:8080`: Maps port 8080 on your host to port 8080 in the container.
+- `-v /path/to/your/data:/data`: Mounts the host directory `/path/to/your/data` to the `/data` directory in the container. The `users.json` file will be stored here.
+
+You can also pass command-line arguments to the container:
+
+```bash
+docker run -p 8080:8080 -v /path/to/your/data:/data zicongmei/server-auth -proxy 3001
+```
 
 ## Endpoints
 
